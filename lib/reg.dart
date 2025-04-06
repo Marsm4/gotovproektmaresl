@@ -59,9 +59,7 @@ class _RegPageState extends State<RegPage> {
                       borderSide: BorderSide(color: Colors.white))),
                 ),
               ),
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.015,
-              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.015),
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.85,
                 child: TextField(
@@ -80,13 +78,12 @@ class _RegPageState extends State<RegPage> {
                       borderSide: BorderSide(color: Colors.white))),
                 ),
               ),
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.015,
-              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.015),
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.85,
                 child: TextField(
                   controller: passController,
+                  obscureText: true,
                   style: TextStyle(color: Colors.white),
                   cursorColor: Colors.white,
                   decoration: InputDecoration(
@@ -101,13 +98,12 @@ class _RegPageState extends State<RegPage> {
                       borderSide: BorderSide(color: Colors.white))),
                 ),
               ),
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.015,
-              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.015),
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.85,
                 child: TextField(
                   controller: repeatController,
+                  obscureText: true,
                   style: TextStyle(color: Colors.white),
                   cursorColor: Colors.white,
                   decoration: InputDecoration(
@@ -122,9 +118,7 @@ class _RegPageState extends State<RegPage> {
                       borderSide: BorderSide(color: Colors.white))),
                 ),
               ),
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.015,
-              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.015),
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.6,
                 child: ElevatedButton(
@@ -139,26 +133,40 @@ class _RegPageState extends State<RegPage> {
                           backgroundColor: Colors.white,
                         ),
                       );
+                    } else if (passController.text != repeatController.text) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Пароли не совпадают", style: TextStyle(color: Colors.black)),
+                          backgroundColor: Colors.white,
+                        ),
+                      );
                     } else {
-                      if (passController.text == repeatController.text) {
+                      try {
+                        // Регистрация в Authentication
                         var user = await authService.sighUp(emailController.text, passController.text);
+                        
                         if (user != null) {
-                          await usersTable.addUser(nameController.text, emailController.text, passController.text);
+                          // Добавление в таблицу users
+                          await usersTable.addUser(
+                            nameController.text, 
+                            emailController.text, 
+                            passController.text,
+                            'https://dilvfoapurgghqtsggml.supabase.co/storage/v1/object/public/Storage//profile.jpg' // Заглушка для аватара
+                          );
+                          
+                          // Сохранение данных в SharedPreferences
                           final prefs = await SharedPreferences.getInstance();
                           await prefs.setBool('isLoggedIn', true);
+                          await prefs.setString('userEmail', emailController.text);
+                          await prefs.setString('userName', nameController.text);
+                          await prefs.setString('userAvatarUrl', 'https://dilvfoapurgghqtsggml.supabase.co/storage/v1/object/public/Storage//profile.jpg');
+                          
                           Navigator.popAndPushNamed(context, '/home');
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Ошибка регистрации", style: TextStyle(color: Colors.black)),
-                              backgroundColor: Colors.white,
-                            ),
-                          );
                         }
-                      } else {
+                      } catch (e) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text("Пароли не совпадают", style: TextStyle(color: Colors.black)),
+                            content: Text("Ошибка регистрации: ${e.toString()}", style: TextStyle(color: Colors.black)),
                             backgroundColor: Colors.white,
                           ),
                         );
@@ -168,15 +176,11 @@ class _RegPageState extends State<RegPage> {
                   child: Text("Создать"),
                 ),
               ),
-              SizedBox(
-                height: MediaQuery.of(context).size.height * 0.015,
-              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.015),
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.6,
                 child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.popAndPushNamed(context, '/');
-                  },
+                  onPressed: () => Navigator.popAndPushNamed(context, '/'),
                   child: Text("Назад", style: TextStyle(color: Colors.white)),
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:musik_player/PlaylistsPage.dart';
 import 'package:musik_player/auth.dart';
 import 'package:musik_player/database/landing.dart';
 import 'package:musik_player/home.dart';
@@ -63,6 +64,7 @@ class AppTheme extends StatelessWidget {
         '/recovery': (context) => RecoveryPage(),
         '/home': (context) => TrackListPage(),
         '/player': (context) => PlayerPage(),
+        '/playlists': (context) => PlaylistsPage(),
       },
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:musik_player/PlaylistTracksPage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,11 +22,12 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     _fetchPlaylists();
   }
 
+  // Метод _fetchPlaylists() остается без изменений
   Future<void> _fetchPlaylists() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('userId');
-      
+
       if (userId == null) {
         setState(() {
           errorMessage = 'Пользователь не авторизован';
@@ -34,106 +36,173 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
         return;
       }
 
-      final response = await supabase
-          .from('list')
-          .select('''
-            id, 
-            created_at, 
-            list_name,
-            playlist (
-              id,
-              track_id,
-              track:track(id, name_track, image)
-            )
-          ''')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+      final listsResponse =
+          await supabase.from('list').select().eq('user_id', userId);
+
+      if (listsResponse.isEmpty) {
+        setState(() {
+          playlists = [];
+          isLoading = false;
+        });
+        return;
+      }
+
+      final List<Map<String, dynamic>> fullPlaylists = [];
+
+      for (final list in listsResponse) {
+        final playlistItems = await supabase
+            .from('playlist')
+            .select('track_id')
+            .eq('list_id', list['id']);
+
+        final trackIds =
+            playlistItems.map<int>((item) => item['track_id'] as int).toList();
+
+        final List<Map<String, dynamic>> tracks = [];
+
+        if (trackIds.isNotEmpty) {
+          final tracksResponse = await supabase.from('Track').select('''
+                *,
+                author:Auhror_list (*),
+                genre:genre_id (*)
+              ''').inFilter('id', trackIds);
+
+          tracks.addAll(tracksResponse);
+        }
+
+        fullPlaylists.add({
+          ...list,
+          'tracks': tracks,
+        });
+      }
 
       setState(() {
-        playlists = List<Map<String, dynamic>>.from(response);
+        playlists = fullPlaylists;
         isLoading = false;
-        errorMessage = null;
       });
     } catch (e) {
       setState(() {
         isLoading = false;
         errorMessage = 'Ошибка загрузки плейлистов: ${e.toString()}';
       });
+      debugPrint('Ошибка при загрузке плейлистов: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Мои плейлисты'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: isLoading ? null : _fetchPlaylists,
-          ),
-        ],
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.blue, Colors.blueGrey],
+        ),
       ),
-      body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _showCreatePlaylistDialog(context);
-        },
-        child: const Icon(Icons.add),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('Мои плейлисты'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: isLoading ? null : _fetchPlaylists,
+            ),
+          ],
+        ),
+        body: _buildBody(),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showCreatePlaylistDialog(context),
+          child: const Icon(Icons.add),
+          backgroundColor: Colors.blueAccent,
+        ),
       ),
     );
   }
 
   Widget _buildBody() {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      );
     }
-    
+
     if (errorMessage != null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(errorMessage!, style: TextStyle(color: Colors.red)),
+            Text(
+              errorMessage!,
+              style: const TextStyle(color: Colors.white),
+            ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _fetchPlaylists,
               child: const Text('Повторить попытку'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+              ),
             ),
           ],
         ),
       );
     }
-    
+
     if (playlists.isEmpty) {
-      return const Center(child: Text('У вас пока нет плейлистов'));
+      return const Center(
+        child: Text(
+          'У вас пока нет плейлистов',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
     }
-    
+
     return ListView.builder(
       itemCount: playlists.length,
       itemBuilder: (context, index) {
         final playlist = playlists[index];
-        final tracks = (playlist['playlist'] as List?)?.length ?? 0;
-        
+        final tracks = playlist['tracks'] as List? ?? [];
+        final tracksCount = tracks.length;
+
         return Card(
+          color: Colors.white.withOpacity(0.2),
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
           child: ListTile(
-            leading: const Icon(Icons.playlist_play, size: 40),
+            leading:
+                const Icon(Icons.playlist_play, size: 40, color: Colors.white),
             title: Text(
               playlist['list_name'] ?? 'Без названия',
-              style: const TextStyle(fontSize: 18),
+              style: const TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold),
             ),
-            subtitle: Text('Треков: $tracks'),
+            subtitle: Text(
+              'Треков: $tracksCount',
+              style: const TextStyle(color: Colors.white70),
+            ),
             trailing: IconButton(
-              icon: const Icon(Icons.more_vert),
+              icon: const Icon(Icons.more_vert, color: Colors.white),
               onPressed: () => _showPlaylistOptions(context, playlist['id']),
             ),
             onTap: () {
-              // Переход к трекам плейлиста
-              Navigator.pushNamed(
-                context, 
-                '/playlist_tracks',
-                arguments: playlist['id'],
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PlaylistTracksPage(
+                    tracks: tracks,
+                    playlistName: playlist['list_name'] ?? 'Без названия',
+                    playlistId: playlist['id'].toString(),
+                  ),
+                ),
               );
             },
           ),
@@ -142,6 +211,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     );
   }
 
+  // Остальные методы (_showCreatePlaylistDialog, _createPlaylist и т.д.)
+  // остаются без изменений
   Future<void> _showCreatePlaylistDialog(BuildContext context) async {
     final controller = TextEditingController();
     return showDialog(
@@ -181,7 +252,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('userId');
-      
+
       if (userId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ошибка авторизации')),
@@ -190,14 +261,14 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       }
 
       setState(() => isLoading = true);
-      
+
       await supabase.from('list').insert({
         'list_name': name,
         'user_id': userId,
       });
-      
+
       await _fetchPlaylists();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Плейлист "$name" создан')),
       );
@@ -239,7 +310,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     );
   }
 
-  Future<void> _showRenameDialog(BuildContext context, String playlistId) async {
+  Future<void> _showRenameDialog(
+      BuildContext context, String playlistId) async {
     final playlist = playlists.firstWhere((p) => p['id'] == playlistId);
     final controller = TextEditingController(text: playlist['list_name']);
 
@@ -278,14 +350,13 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
   Future<void> _renamePlaylist(String playlistId, String newName) async {
     try {
       setState(() => isLoading = true);
-      
+
       await supabase
           .from('list')
-          .update({'list_name': newName})
-          .eq('id', playlistId);
-      
+          .update({'list_name': newName}).eq('id', playlistId);
+
       await _fetchPlaylists();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Название плейлиста изменено')),
       );
@@ -298,13 +369,15 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
     }
   }
 
-  Future<void> _showDeleteConfirmation(BuildContext context, String playlistId) async {
+  Future<void> _showDeleteConfirmation(
+      BuildContext context, String playlistId) async {
     return showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Удалить плейлист?'),
-          content: const Text('Все треки в этом плейлисте будут удалены. Это действие нельзя отменить.'),
+          content: const Text(
+              'Все треки в этом плейлисте будут удалены. Это действие нельзя отменить.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -316,7 +389,8 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
                 Navigator.pop(context);
                 await _deletePlaylist(playlistId);
               },
-              child: const Text('Удалить', style: TextStyle(color: Colors.white)),
+              child:
+                  const Text('Удалить', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -327,21 +401,15 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
   Future<void> _deletePlaylist(String playlistId) async {
     try {
       setState(() => isLoading = true);
-      
+
       // Сначала удаляем все треки из плейлиста
-      await supabase
-          .from('playlist')
-          .delete()
-          .eq('list_id', playlistId);
-      
+      await supabase.from('playlist').delete().eq('list_id', playlistId);
+
       // Затем удаляем сам плейлист
-      await supabase
-          .from('list')
-          .delete()
-          .eq('id', playlistId);
-      
+      await supabase.from('list').delete().eq('id', playlistId);
+
       await _fetchPlaylists();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Плейлист удален')),
       );
